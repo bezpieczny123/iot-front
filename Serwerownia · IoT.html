@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Serwerownia · IoT</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#161718;--pn:#1d1f21;--ln:#2d3033;--tx:#d9d7d1;--mu:#85837d;--ac:#e0a526;--er:#d4573f;--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#eeece6;--pn:#f7f6f2;--ln:#d3d0c7;--tx:#222;--mu:#74726b;--ac:#a86f00;--er:#b3402b;color-scheme:light}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}[hidden]{display:none!important}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:14px/1.5 var(--sans);min-height:100vh}
+button,select,input{font:inherit;color:inherit}
+button{background:none;border:1px solid var(--ln);padding:5px 12px;cursor:pointer}
+button:hover{border-color:var(--mu)}
+.mono,.lb,th,.big,.nav a,.dev{font-family:var(--mono)}
+.lb{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu)}
+#gate{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#gate h1{font:500 clamp(28px,6vw,56px)/1 var(--mono);letter-spacing:.28em;margin:0 0 14px;text-transform:uppercase}
+#gate p{margin:0;color:var(--mu);font:12px var(--mono);letter-spacing:.12em}
+#app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.side{border-right:1px solid var(--ln);padding:20px 0 70px;position:sticky;top:0;height:100vh}
+.side .t{font:500 13px var(--mono);letter-spacing:.2em;padding:0 20px 18px;border-bottom:1px solid var(--ln);margin-bottom:10px}
+.nav a{display:flex;gap:12px;padding:8px 20px;color:var(--mu);cursor:pointer;font-size:13px;border-left:2px solid transparent}
+.nav a b{font-weight:400;opacity:.5}
+.nav a:hover{color:var(--tx)}
+.nav a.on{color:var(--tx);border-left-color:var(--ac);background:var(--pn)}
+.nav .sep{padding:14px 20px 4px}
+main{padding:0 28px 80px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid var(--ln);margin-bottom:24px}
+.top h2{margin:0;font:500 18px var(--sans)}
+.who{display:flex;gap:14px;align-items:center;font:12px var(--mono);color:var(--mu)}
+.g{display:grid;gap:16px;margin-bottom:16px}
+.c4{grid-template-columns:repeat(4,1fr)}.c2{grid-template-columns:1fr 1fr}
+.p{background:var(--pn);border:1px solid var(--ln);padding:14px 16px;min-width:0}
+.p>.lb{display:flex;justify-content:space-between;margin-bottom:10px}
+.big{font-size:28px;font-weight:500}.big small{font-size:13px;color:var(--mu);margin-left:4px}
+.sub{color:var(--mu);font-size:12px;margin-top:2px}
+.cw{position:relative}.ch{width:100%;height:150px;display:block}
+.ch line{stroke:var(--ln);stroke-width:1;vector-effect:non-scaling-stroke}
+.ch polyline{fill:none;stroke:var(--ac);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.ax{display:flex;justify-content:space-between;font:11px var(--mono);color:var(--mu);margin-top:4px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:150px;border-bottom:1px solid var(--ln)}
+.bars i{flex:1;background:var(--mu);opacity:.55}.bars i:last-child{background:var(--ac);opacity:1}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);text-align:left;padding:6px 10px;border-bottom:1px solid var(--ln)}
+td{padding:8px 10px;border-bottom:1px solid var(--ln)}
+td.m{font-family:var(--mono);font-size:12px}
+.tw{overflow-x:auto}
+.d{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mu);margin-right:8px}
+.d.ok{background:var(--tx)}.d.w{background:var(--ac)}.d.e{background:var(--er)}
+.tag{font:11px var(--mono);border:1px solid var(--ln);padding:1px 7px}.tag.w{color:var(--ac);border-color:var(--ac)}.tag.e{color:var(--er);border-color:var(--er)}
+.seg{display:inline-flex}.seg button{border-right:0}.seg button:last-child{border-right:1px solid var(--ln)}
+.seg button.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--ln)}.row:last-child{border:0}
+.tg{width:40px;height:20px;padding:0;position:relative}.tg::after{content:"";position:absolute;top:3px;left:3px;width:12px;height:12px;background:var(--mu)}
+.tg.on{border-color:var(--ac)}.tg.on::after{left:23px;background:var(--ac)}
+.sw{display:flex;gap:8px}.sw button{width:26px;height:26px;padding:0}.sw button.on{outline:2px solid var(--tx);outline-offset:2px}
+input[type=text],select{background:var(--bg);border:1px solid var(--ln);padding:5px 8px}
+input[type=range]{accent-color:var(--ac);width:160px}
+.note{border-left:2px solid var(--ac);padding:4px 12px;color:var(--mu);margin-top:12px;font-size:13px}
+.note b{color:var(--tx);font-weight:500}
+.dev{position:fixed;bottom:0;left:0;right:0;display:flex;gap:6px;align-items:center;padding:8px 14px calc(8px + env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--ln);font-size:11px;color:var(--mu);z-index:5;flex-wrap:wrap}
+.dev button{font-size:11px;padding:2px 9px}.dev button.on{background:var(--ac);color:#111;border-color:var(--ac)}
+#toast{position:fixed;right:16px;bottom:56px;background:var(--tx);color:var(--bg);padding:6px 12px;font:12px var(--mono);display:none;z-index:9}
+@media(max-width:860px){#app{grid-template-columns:1fr}.side{position:static;height:auto;padding:12px 0;border:0;border-bottom:1px solid var(--ln)}.nav{display:flex;overflow-x:auto}.nav a{white-space:nowrap;border-left:0;border-bottom:2px solid transparent}.nav a.on{border-bottom-color:var(--ac)}.nav .sep,.side .t{display:none}.c4,.c2{grid-template-columns:1fr 1fr}main{padding:0 14px 80px}}
+@media(max-width:520px){.c4,.c2{grid-template-columns:1fr}}
+</style></head><body>
+<div id="gate"><h1>Serwerownia</h1><p>SYSTEM IoT · KONTROLA ŚRODOWISKA I DOSTĘPU</p></div>
+<div id="app" hidden><aside class="side"><div class="t">SERWEROWNIA</div><nav class="nav" id="nav"></nav></aside>
+<main><div class="top"><h2 id="ttl"></h2><div class="who"><span id="usr"></span><button onclick="setLvl(0)">Wyloguj</button></div></div><div id="pg"></div></main></div>
+<div class="dev"><span>SYMULACJA SESJI:</span><span id="devb"></span></div><div id="toast"></div>
+<script>
+const LV=['Brak dostępu','Obserwator','Operator','Administrator'],NM=['','j.kowalski','a.nowak','admin'];
+let lvl=0,pg='ov',seed=7,rg=24;
+const rnd=()=>(seed=seed*16807%2147483647)/2147483647;
+const ser=(n,b,a,p)=>Array.from({length:n},(_,i)=>b+a*Math.sin(i/n*6.28*p)+(rnd()-.5)*a*.4);
+const $=s=>document.querySelector(s);
+function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',1600)}
+function ch(t,d,mn,mx,ax,u){const w=600,h=150,s=d.map((v,i)=>(i/(d.length-1)*w).toFixed(1)+','+(h-(v-mn)/(mx-mn)*h).toFixed(1)).join(' ');
+return `<div class="p"><div class="lb"><span>${t}</span><span>${u}</span></div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="ch">${[0,1,2,3].map(i=>`<line x1="0" x2="${w}" y1="${i*h/3}" y2="${i*h/3}"/>`).join('')}<polyline points="${s}"/></svg><div class="ax">${ax.map(a=>`<span>${a}</span>`).join('')}</div></div>`}
+const tb=(h,r)=>`<div class="tw"><table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${r.map(x=>`<tr>${x.map(c=>`<td${/^[\d:.\- ,]+$/.test(c)?' class="m"':''}>${c}</td>`).join('')}</tr>`).join('')}</table></div>`;
+const st=(l,v,u,s)=>`<div class="p"><div class="lb">${l}</div><div class="big">${v}<small>${u}</small></div><div class="sub">${s}</div></div>`;
+const tg=(on)=>`<button class="tg ${on?'on':''}" onclick="this.classList.toggle('on')"></button>`;
+const res=r=>r=='OK'?'<span class="tag">OK</span>':r=='ODMOWA'?'<span class="tag e">ODMOWA</span>':'<span class="tag w">'+r+'</span>';
+const AX24=['00:00','06:00','12:00','18:00','teraz'];
+const EV=[['08:42:11','j.kowalski','Karta RFID','Wejście główne','OK'],['08:40:03','a.nowak','Kod PIN','Serwerownia A','OK'],['07:58:30','nieznany','Kod PIN','Serwerownia A','ODMOWA'],['07:31:09','m.wisniewska','Karta RFID','Wejście główne','OK'],['06:12:44','admin','Karta RFID','Serwerownia B','OK'],['05:50:02','karta #0x4F2A','Karta RFID','Wejście główne','ODMOWA'],['22:14:51','a.nowak','Kod PIN','Wejście główne','WYGASŁY']];
+let US=[['j.kowalski','Jan Kowalski','Operator','RFID + PIN','Wszystkie strefy','aktywny'],['a.nowak','Anna Nowak','Obserwator','PIN','Wejście, Serwerownia A','aktywny'],['m.wisniewska','Maria Wiśniewska','Obserwator','RFID','Wejście główne','aktywny'],['admin','Administrator','Administrator','RFID + PIN','Wszystkie strefy','aktywny'],['t.zielinski','Tomasz Zieliński','Obserwator','RFID','Wejście główne','zablokowany']];
+const rangeBar=()=>`<div class="seg">${[[24,'24 h'],[168,'7 dni'],[720,'30 dni']].map(([v,l])=>`<button class="${rg==v?'on':''}" onclick="rg=${v};show()">${l}</button>`).join('')}</div>`;
+const rax=()=>rg==24?AX24:rg==168?['-7d','-5d','-3d','-1d','teraz']:['-30d','-22d','-15d','-7d','teraz'];
+const P={
+ov:['Przegląd',1,()=>`<div class="g c4">${st('Temperatura','22,4','°C','serwerownia A · cel 22')}${st('Wilgotność','46','%','norma 40–60')}${st('Ciepłomierz','3,2','kW','dziś 41 kWh')}${st('Drzwi','Zamknięte','','ostatnie wejście 08:42')}</div><div class="g c2">${ch('Temperatura 24 h',ser(60,22.4,1.3,2),19,26,AX24,'°C')}${ch('Moc cieplna 24 h',ser(60,3.2,1,1.5),0,5,AX24,'kW')}</div><div class="p"><div class="lb"><span>Ostatnie zdarzenia</span><a href="#" onclick="go('ac');return false" style="color:var(--ac)">wszystkie →</a></div>${tb(['Czas','Użytkownik','Metoda','Strefa','Wynik'],EV.slice(0,4))}</div>`],
+en:['Środowisko',1,()=>`<div style="margin-bottom:16px">${rangeBar()}</div><div class="g c2">${ch('Temperatura',ser(70,22.4,1.5,rg/24>1?3:2),19,26,rax(),'°C')}${ch('Wilgotność',ser(70,46,5,rg/24>1?3:2),30,65,rax(),'%')}</div><div class="p"><div class="lb">Czujniki</div>${tb(['Czujnik','Lokalizacja','Temp.','Wilg.','Bateria','Odczyt'],[['<span class="d ok"></span>ENV-01','Serwerownia A, rack 1','22,4 °C','46 %','91 %','12 s temu'],['<span class="d ok"></span>ENV-02','Serwerownia A, rack 4','24,1 °C','44 %','87 %','12 s temu'],['<span class="d w"></span>ENV-03','Serwerownia B','21,0 °C','52 %','18 %','1 min temu'],['<span class="d e"></span>ENV-04','Korytarz','—','—','—','brak 3 h']])}</div>`],
+he:['Ciepłomierz i energia',1,()=>`<div class="g c4">${st('Dziś','41,2','kWh','do 14:00')}${st('Wczoraj','58,7','kWh','')}${st('Bateria modułu','74','%','szac. 14 mies.')}${st('Interwał pomiaru','5','min','sen między odczytami')}</div><div class="g c2"><div class="p"><div class="lb"><span>Dzienne zużycie</span><span>kWh · 14 dni</span></div><div class="bars">${ser(14,55,18,1).map(v=>`<i style="height:${v/80*100}%" title="${v.toFixed(0)} kWh"></i>`).join('')}</div><div class="ax"><span>-14d</span><span>dziś</span></div></div>${ch('Temp. zewnętrzna',ser(60,6,5,1.5),-4,16,AX24,'°C')}</div><div class="p"><div class="lb">Analiza AI</div><div class="mono" style="font-size:22px">r = −0,87</div><div class="note"><b>Zużycie energii silnie koreluje z temperaturą zewnętrzną.</b> Spadek o 1 °C zwiększa dobowe zużycie o ok. 2,4 kWh. Wykryto anomalię: 22.10, wzrost zużycia bez zmiany temperatury.</div></div>`],
+ct:['Sterowanie',2,()=>`<div class="g c2"><div class="p"><div class="lb">Wyjścia binarne</div>${[['Wentylator nawiewny',1],['Klimatyzacja A',1],['Klimatyzacja B',0],['Zasilanie rack B',1]].map(([n,o])=>`<div class="row"><span>${n}</span>${tg(o)}</div>`).join('')}<div class="lb" style="margin:18px 0 6px">Wejścia binarne</div>${[['Przycisk awaryjny','wciśnięty',0],['Czujnik otwarcia drzwi','zamknięty',1],['Przycisk serwisowy','zwolniony',1]].map(([n,s,k])=>`<div class="row"><span>${n}</span><span class="mono"><span class="d ${k?'ok':'e'}"></span>${s}</span></div>`).join('')}</div>
+<div class="p"><div class="lb">Oświetlenie</div><div class="row"><span>Zasilanie</span>${tg(1)}</div><div class="row"><span>Kolor</span><div class="sw">${['#e8e4da','#e0a526','#d4573f','#4f8fd1','#5aa86b'].map((c,i)=>`<button class="${i?'':'on'}" style="background:${c}" onclick="document.querySelectorAll('.sw button').forEach(b=>b.classList.remove('on'));this.classList.add('on')"></button>`).join('')}</div></div><div class="row"><span>Jasność</span><input type="range" value="70"></div><div class="row"><span>Efekt</span><select><option>Statyczny</option><option>Pulsowanie</option><option>Płynne przejście</option><option>Alarm (migotanie)</option></select></div><div class="note">Kolor może sygnalizować stan dostępu: zielony — wejście, czerwony — odmowa.</div></div></div>`],
+ac:['Dostęp i zdarzenia',2,()=>`<div class="g c2" style="grid-template-columns:2fr 1fr"><div class="p"><div class="lb"><span>Dziennik zdarzeń</span><span><select><option>Wszystkie strefy</option><option>Wejście główne</option><option>Serwerownia A</option></select></span></div>${tb(['Czas','Użytkownik','Metoda','Strefa','Wynik'],EV)}</div><div class="p"><div class="lb">Sygnalizacja czytnika</div>${[['#5aa86b','Dostęp przyznany'],['#d4573f','Odmowa dostępu'],['#e0a526','Kod wygasły / blokada'],['#4f8fd1','Oczekiwanie na kod']].map(([c,t])=>`<div class="row"><span><span class="d" style="background:${c}"></span>${t}</span><span class="mono" style="color:var(--mu)">edytuj</span></div>`).join('')}<div class="lb" style="margin:18px 0 6px">Czytniki</div><div class="row"><span><span class="d ok"></span>Wejście główne</span><span class="mono">ZB-A1</span></div><div class="row"><span><span class="d ok"></span>Serwerownia A</span><span class="mono">ZB-A2</span></div></div></div>`],
+rp:['Raporty',2,()=>`<div class="p" style="margin-bottom:16px"><div class="lb">Generator raportu</div><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"><select><option>Dostęp użytkownika</option><option>Środowisko</option><option>Zużycie energii</option></select><select>${US.map(u=>`<option>${u[0]}</option>`).join('')}</select><input type="text" value="01.10.2026 – 28.10.2026" style="width:190px"><button onclick="toast('mockup: brak funkcji')">CSV</button><button onclick="toast('mockup: brak funkcji')">PDF</button></div></div><div class="p"><div class="lb">Podgląd</div>${tb(['Czas','Użytkownik','Metoda','Strefa','Wynik'],EV.slice(0,5))}</div>`],
+us:['Użytkownicy',3,()=>`<div class="p"><div class="lb"><span>Konta i uprawnienia</span><span>${US.length} kont</span></div>${tb(['Login','Imię i nazwisko','Rola','Identyfikator','Strefy','Status',''],US.map((u,i)=>[...u.slice(0,5),u[5]=='aktywny'?'<span class="d ok"></span>aktywny':'<span class="d e"></span>zablokowany',`<button onclick="US.splice(${i},1);show()">Usuń</button>`]))}<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap"><input type="text" id="nn" placeholder="Imię i nazwisko"><select id="nr"><option>Obserwator</option><option>Operator</option><option>Administrator</option></select><button onclick="addU()">+ Dodaj użytkownika</button></div></div>`],
+dv:['Urządzenia i system',3,()=>`<div class="g c2"><div class="p"><div class="lb">Moduły ZigBee</div>${tb(['Moduł','Typ','LQI','Bat.'],[['<span class="d ok"></span>GW-01','Bramka','—','sieć'],['<span class="d ok"></span>ENV-01','Czujnik','212','91 %'],['<span class="d w"></span>ENV-03','Czujnik','148','18 %'],['<span class="d ok"></span>ACC-01','Czytnik RFID','230','sieć'],['<span class="d ok"></span>HM-01','Ciepłomierz','176','74 %'],['<span class="d ok"></span>LGT-01','Oświetlenie','201','sieć']])}</div><div class="p"><div class="lb">Serwer · Raspberry Pi</div>${[['PostgreSQL','działa'],['Mosquitto (MQTT)','działa'],['Aplikacja serwerowa','działa'],['Zigbee2MQTT','działa']].map(([n,s])=>`<div class="row"><span><span class="d ok"></span>${n}</span><span class="mono">${s}</span></div>`).join('')}<div class="row"><span>CPU / RAM</span><span class="mono">18 % / 41 %</span></div><div class="row"><span>Temp. SoC</span><span class="mono">52 °C</span></div><div class="row"><span>Baza danych</span><span class="mono">2,4 GB</span></div></div></div>`]
+};
+function addU(){const n=$('#nn').value.trim();if(!n)return;US.push([n.toLowerCase().replace(/\s+/g,'.'),n,$('#nr').value,'—','Wejście główne','aktywny']);show()}
+function go(p){pg=p;show()}
+function setLvl(l){lvl=l;if(l&&P[pg][1]>l)pg='ov';show()}
+function show(){
+const on=lvl>0;$('#gate').hidden=on;$('#app').hidden=!on;
+$('#devb').innerHTML=LV.map((n,i)=>`<button class="${i==lvl?'on':''}" onclick="setLvl(${i})">${i?n:'Gość'}</button>`).join('');
+if(!on)return;
+const ks=Object.keys(P).filter(k=>P[k][1]<=lvl);let h='',i=0;
+ks.forEach(k=>{if(k=='ct'||k=='us')h+=`<div class="sep lb">${k=='ct'?'Operacje':'Administracja'}</div>`;h+=`<a class="${k==pg?'on':''}" onclick="go('${k}')"><b>${String(++i).padStart(2,'0')}</b>${P[k][0]}</a>`});
+$('#nav').innerHTML=h;$('#ttl').textContent=P[pg][0];$('#usr').textContent=NM[lvl]+' · '+LV[lvl];$('#pg').innerHTML=P[pg][2]()}
+show();
+</script></body></html>
