@@ -1,0 +1,11 @@
+.split-wide { grid-template-columns: 2fr 1fr; align-items: start; }
+.inline-fields, .card-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.card-actions { gap: 4px; }
+.form-panel { margin-bottom: 16px; }
+.field-status { color: var(--mu); }
+.text-button { border: 0; padding: 0; text-decoration: underline; }
+.chart-empty { height: 150px; color: var(--mu); }
+.raw-payload { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 860px) {
+  .split-wide { grid-template-columns: 1fr; }
+}
