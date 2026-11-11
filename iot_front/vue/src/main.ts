@@ -10,7 +10,7 @@ import Events from './views/Events.vue'
 import Reports from './views/Reports.vue'
 import Users from './views/Users.vue'
 import Devices from './views/Devices.vue'
-import '../../style.css'
+import './style.css'
 import './panel.css'
 
 export const pages = [

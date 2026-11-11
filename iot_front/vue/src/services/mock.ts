@@ -18,7 +18,7 @@ const names = { 1: 'a.nowak', 2: 'j.kowalski', 3: 'admin' }
 const hour = 3600000
 const day = 24 * hour
 const iso = (timestamp: number) => new Date(timestamp).toISOString()
-const makeCard = (id: number, body: Partial<NewCard>): Card => ({
+const makeCard = (id: number, body: Partial<Pick<NewCard, 'label' | 'valid_from' | 'valid_to'>>): Card => ({
   id, label: body.label || 'karta', is_active: true,
   valid_from: body.valid_from, valid_to: body.valid_to,
 })
