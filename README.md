@@ -5,10 +5,10 @@ Zwykły HTML + JS, bez budowania i bez zależności.
 
 ## Pliki
 
-index.html   strony i logika interfejsu
-api.js       komunikacja z serwerem (REST + WebSocket), nazwy urządzeń, tryb mock
-style.css    wygląd
-fonts/       IBM Plex
+- index.html   strony i logika interfejsu
+- api.js       komunikacja z serwerem (REST + WebSocket), nazwy urządzeń, tryb mock
+- style.css    wygląd
+- fonts/       IBM Plex
 
 
 ## Szybki start (tryb mock, bez serwera i sprzętu)
