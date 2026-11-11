@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Serwerownia · IoT</title>
+    <!-- Fonty: bez internetu użyty zostanie fallback. Lokalnie: dodaj @font-face dla IBM Plex (woff2) obok pliku. -->
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="gate">
+      <h1>Serwerownia</h1>
+      <p>ZBLIŻ KARTĘ DO CZYTNIKA, ABY SIĘ ZALOGOWAĆ</p>
+      <p id="cs"></p>
+    </div>
+    <div id="app" hidden>
+      <aside class="side">
+        <div class="t">SERWEROWNIA</div>
+        <nav class="nav" id="nav"></nav>
+      </aside>
+      <main>
+        <div class="top">
+          <h2 id="ttl"></h2>
+          <div class="who">
+            <span id="cd"></span><span id="usr"></span><button onclick="logout()">Wyloguj</button>
+          </div>
+        </div>
+        <div id="pg"></div>
+      </main>
+    </div>
+    <div class="dev" id="devbar" hidden>
+      <span>TRYB MOCK – symuluj kartę:</span><span id="devb"></span>
+    </div>
+    <div id="toast"></div>
+    <script src="api.js"></script>
+    <script>
+      const LV = ['', 'Obserwator', 'Operator', 'Administrator'],
+        TZ = 'Europe/Warsaw';
+      let pg = 'ov',
+        rg = 24,
+        R = { h: [], r: [] },
+        lt;
+      const $ = s => document.querySelector(s),
+        enc = encodeURIComponent;
+      const esc = s =>
+        String(s ?? '').replace(
+          /[&<>"]/g,
+          c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]
+        );
+      const fdt = t => new Date(t).toLocaleString('pl-PL', { timeZone: TZ, hour12: false }),
+        ftm = t =>
+          new Date(t).toLocaleTimeString('pl-PL', {
+            timeZone: TZ,
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+        fdy = t =>
+          new Date(t).toLocaleDateString('pl-PL', {
+            timeZone: TZ,
+            day: '2-digit',
+            month: '2-digit'
+          });
+      const fn = (v, d = 1) =>
+        v == null || v === '' || isNaN(v) ? '—' : (+v).toFixed(d).replace('.', ',');
+      const ago = t => {
+        if (!t) return '—';
+        const s = (Date.now() - t) / 1e3;
+        return s < 90
+          ? Math.round(s) + ' s temu'
+          : s < 5400
+            ? Math.round(s / 60) + ' min temu'
+            : Math.round(s / 3600) + ' h temu';
+      };
+
+      function toast(t) {
+        const e = $('#toast');
+        e.textContent = t;
+        e.style.display = 'block';
+        setTimeout(() => (e.style.display = 'none'), 1800);
+      }
+
+      /* ---------- WebSocket / store ---------- */
+      function stat() {
+        $('#cs').textContent = S.on ? 'połączono z serwerem' : 'łączenie z serwerem…';
+        $('#cd').innerHTML =
+          `<span class="d ${S.on ? 'ok' : 'e'}"></span>${S.on ? (MOCK ? 'mock' : 'online') : 'offline'}`;
+      }
+
+      function live() {
+        clearTimeout(lt);
+        lt = setTimeout(() => {
+          if (!S.lvl) return;
+          if (pg == 'ov') tiles();
+          else if (
+            (pg == 'ct' || pg == 'dv') &&
+            !/INPUT|SELECT/.test(document.activeElement.tagName)
+          )
+            show();
+        }, 400);
+      }
+
+      function logout() {
+        S.lvl = 0;
+        S.user = '';
+        show();
+      }
+
+      /* ---------- widżety ---------- */
+      const tb = (h, r) =>
+        `<div class="tw">
+          <table>
+            <tr>${h.map(x => `<th>${x}</th>`).join('')}</tr>${r.length ? r.map(x => `<tr>${x.map(c => `<td${/^[\d:.\- ,]+$/.test(c) ? ' class="m"' : ''}>${c}</td>`).join('')}</tr>`).join('') : `<tr>
+              <td colspan="${h.length}" style="color:var(--mu)">brak danych</td>
+            </tr>`}
+          </table>
+        </div>`;
+      const st = (id, l, v, u, s) =>
+        `<div class="p">
+          <div class="lb">${l}</div>
+          <div class="big"><span id="${id}">${v}</span><small>${u}</small></div>
+          <div class="sub" id="${id}s">${s || ''}</div>
+        </div>`;
+      const res = r =>
+        r == 'OK' || r == 'granted'
+          ? '<span class="tag">OK</span>'
+          : r == 'ODMOWA' || r == 'denied'
+            ? '<span class="tag e">ODMOWA</span>'
+            : '<span class="tag w">' + esc(r) + '</span>';
+      const iso = d => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
+      let RF = iso(-7),
+        RT = iso(0);
+      const rangeBar = () =>
+        `<div class="seg">${[
+          [24, '24 h'],
+          [168, '7 dni'],
+          [720, '30 dni'],
+          [0, 'własny']
+        ]
+          .map(
+            ([v, l]) =>
+              `<button class="${rg == v ? 'on' : ''}" onclick="rg=${v};show()">${l}</button>`
+          )
+          .join(
+            ''
+          )}</div>${rg ? '' : ` <input type="date" value="${RF}" onchange="RF=this.value;show()"> – <input type="date" value="${RT}" onchange="RT=this.value;show()">`}`;
+      const D = (n, k) => (S.dev[n] || {})[k];
+
+      function tiles() {
+        const t = S.dev[DEV.temp],
+          o = D(DEV.occ, 'occupancy');
+        if ($('#t1')) $('#t1').textContent = fn(t && t.temperature);
+        if ($('#t2')) $('#t2').textContent = fn(t && t.humidity, 0);
+        if ($('#t4')) $('#t4').textContent = o == null ? '—' : o ? 'Obecność' : 'Brak ruchu';
+      }
+
+      async function chart(id, t, dev, key, u, h) {
+        const el = $('#' + id);
+        if (!el) return;
+        el.className = 'p';
+        el.innerHTML = `<div class="lb"><span>${t}</span><span>${u}</span></div>
+        <div style="height:150px;color:var(--mu)">ładowanie…</div>`;
+        try {
+          let to = h ? new Date() : new Date(RT + 'T23:59:59'),
+            from = h ? new Date(+to - h * 36e5) : new Date(RF);
+          if (from > to) [from, to] = [to, from];
+          const long = to - from > 1.5 * 864e5;
+          const r = await api(
+            `/history?device=${dev}&key=${key}&from=${from.toISOString()}&to=${to.toISOString()}&agg=${long ? 'hour' : 'raw'}`
+          );
+          if (!r.length) throw 0;
+          const v = r.map(x => +x.value),
+            tm = r.map(x => +new Date(x.time)),
+            mn = Math.min(...v),
+            mx = Math.max(...v),
+            pd = (mx - mn || 1) * 0.1,
+            a = mn - pd,
+            b = mx + pd,
+            sp = tm[tm.length - 1] - tm[0] || 1;
+          const pts = v
+            .map(
+              (y, i) =>
+                (((tm[i] - tm[0]) / sp) * 600).toFixed(1) +
+                ',' +
+                (150 - ((y - a) / (b - a)) * 150).toFixed(1)
+            )
+            .join(' ');
+          const f = long ? fdy : ftm,
+            mid = tm[Math.floor(tm.length / 2)];
+          el.innerHTML = `<div class="lb"><span>${t}</span><span>${u} · ${fn(mn)}–${fn(mx)}</span></div>
+          <div class="cw"><svg viewBox="0 0 600 150" preserveAspectRatio="none" class="ch">${[0, 1, 2, 3].map(i => `<line x1="0" x2="600" y1="${i * 50}" y2="${i * 50}"/>`).join('')}<polyline points="${pts}"/></svg>
+            <div class="vl"></div>
+            <div class="tip"></div>
+          </div>
+          <div class="ax"><span>${f(tm[0])}</span><span>${f(mid)}</span><span>${f(tm[tm.length - 1])}</span></div>`;
+          const cw = el.querySelector('.cw'),
+            vl = cw.querySelector('.vl'),
+            tp = cw.querySelector('.tip');
+          cw.onmousemove = e => {
+            const rc = cw.getBoundingClientRect(),
+              q = tm[0] + ((e.clientX - rc.left) / rc.width) * sp;
+            let i = 0;
+            tm.forEach((x, k) => {
+              if (Math.abs(x - q) < Math.abs(tm[i] - q)) i = k;
+            });
+            const px = ((tm[i] - tm[0]) / sp) * rc.width;
+            vl.style.cssText = `display:block;left:${px}px`;
+            tp.textContent = fdt(tm[i]) + ' · ' + fn(v[i], 2) + ' ' + u;
+            tp.style.display = 'block';
+            tp.style.left = Math.max(0, Math.min(px + 8, rc.width - tp.offsetWidth)) + 'px';
+          };
+          cw.onmouseleave = () => {
+            vl.style.display = tp.style.display = 'none';
+          };
+        } catch {
+          el.lastChild.textContent = 'brak danych';
+        }
+      }
+
+      async function evTable(sel, n, flt) {
+        const el = $(sel);
+        if (!el) return;
+        try {
+          let r = await api('/events?limit=' + n);
+          if (flt) r = r.filter(x => x.type == flt || x.source == flt);
+          el.innerHTML =
+            '<div class="sc">' +
+            tb(
+              ['Czas', 'Źródło', 'Typ', 'Obiekt', 'Szczegóły'],
+              r.map(x => [
+                fdt(x.time),
+                esc(x.source),
+                res(x.type),
+                esc(x.subject),
+                esc(x.details || '')
+              ])
+            ) +
+            '</div>';
+        } catch {
+          el.textContent = 'błąd pobierania zdarzeń';
+        }
+      }
+
+      function csv() {
+        if (!R.r.length) return toast('Najpierw wygeneruj raport');
+        const q = c => '"' + String(c).replace(/"/g, '""') + '"';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(
+          new Blob(['\ufeff' + [R.h, ...R.r].map(r => r.map(q).join(';')).join('\n')], {
+            type: 'text/csv'
+          })
+        );
+        a.download = 'raport.csv';
+        a.click();
+      }
+
+      /* ---------- strony ---------- */
+      const P = {
+
+        ov: [
+          'Przegląd',
+          1,
+          () => {
+            const t = S.dev[DEV.temp] || {},
+              o = D(DEV.occ, 'occupancy');
+            return `<div class="g c4">${st('t1', 'Temperatura', fn(t.temperature), '°C', DEV.temp)}${st('t2', 'Wilgotność', fn(t.humidity, 0), '%', '')}${st('t3', 'Ciepłomierz', fn(val(DEV.heat, K.eDay)), 'kWh', 'zużycie dziś')}${st('t4', 'Obecność', o == null ? '—' : o ? 'Obecność' : 'Brak ruchu', '', DEV.occ)}</div>
+            <div class="g c2">
+              <div id="c1"></div>
+              <div id="c2"></div>
+            </div>
+            <div class="p">
+              <div class="lb"><span>Ostatnie zdarzenia</span><a href="#" onclick="go('ac');return false" style="color:var(--ac)">wszystkie →</a></div>
+              <div id="evs"></div>
+            </div>`;
+          },
+          () => {
+            chart('c1', 'Temperatura 24 h', DEV.temp, 'temperature', '°C', 24);
+            chart('c2', 'Wilgotność 24 h', DEV.temp, 'humidity', '%', 24);
+            evTable('#evs', 5);
+            api('/heat?from=' + new Date(Date.now() - 864e5 * 3).toISOString())
+              .then(r => {
+                if (r.length && $('#t3'))
+                  $('#t3').textContent = fn(r[r.length - 1].energy_used_kwh);
+              })
+              .catch(() => {});
+          }
+        ],
+
+        en: [
+          'Środowisko',
+          1,
+          () => {
+            const rows = Object.entries(S.dev)
+              .filter(([n, d]) => d.temperature != null || d.humidity != null)
+              .map(([n, d]) => [
+                `<span class="d ${d._on ? 'ok' : 'e'}"></span>${esc(n)}`,
+                fn(d.temperature) + ' °C',
+                fn(d.humidity, 0) + ' %',
+                d.battery != null ? d.battery + ' %' : '—',
+                ago(d._t)
+              ]);
+            return `<div style="margin-bottom:16px">${rangeBar()}</div>
+            <div class="g c2">
+              <div id="c1"></div>
+              <div id="c2"></div>
+            </div>
+            <div class="p">
+              <div class="lb">Czujniki (na żywo)</div>${tb(['Czujnik', 'Temp.', 'Wilg.', 'Bateria', 'Odczyt'], rows)}
+            </div>`;
+          },
+          () => {
+            chart('c1', 'Temperatura', DEV.temp, 'temperature', '°C', rg);
+            chart('c2', 'Wilgotność', DEV.temp, 'humidity', '%', rg);
+          }
+        ],
+
+        he: [
+          'Ciepłomierz i energia',
+          1,
+          () => {
+            const c = S.dev[DEV.heat] || {};
+            return `<div class="g c4">${st('h1', 'Dziś', fn(val(DEV.heat, K.eDay)), 'kWh', '')}${st('h2', 'Wczoraj', '—', 'kWh', '')}${st('h3', 'Bateria modułu', c.battery != null ? c.battery : '—', '%', 'ostatni odczyt: ' + ago(c._t))}${st('h4', 'Odczyty', '—', '', 'ostatnie 30 dni')}</div>
+            <div class="p">
+              <div class="lb"><span>Dzienne zużycie</span><span>kWh · 30 dni</span></div>
+              <div id="hb" style="color:var(--mu)">ładowanie…</div>
+            </div>`;
+          },
+          async () => {
+            try {
+              const r = await api('/heat?from=' + new Date(Date.now() - 30 * 864e5).toISOString());
+              if (!$('#hb')) return;
+              if (!r.length) throw 0;
+              const v = r.map(x => +x.energy_used_kwh),
+                m = Math.max(...v) || 1;
+              $('#h1').textContent = fn(v[v.length - 1]);
+              $('#h2').textContent = fn(v[v.length - 2]);
+              $('#h4').textContent = r.length;
+              $('#hb').outerHTML =
+                `<div>
+                  <div class="bars">${v.map((x, i) => `<i style="height:${(x / m) * 100}%" title="${fdy(r[i].day)}: ${fn(x)} kWh"></i>`).join('')}</div>
+                  <div class="ax"><span>${fdy(r[0].day)}</span><span>dziś</span></div>
+                </div>`;
+            } catch {
+              $('#hb').textContent = 'brak danych z ciepłomierza';
+            }
+          }
+        ],
+
+        ct: [
+          'Sterowanie',
+          2,
+          () => {
+            const l = S.dev[DEV.strip] || {},
+              b = S.dev[DEV.bulb] || {},
+              bc = DEV.bulb,
+              sn = (n, re) => {
+                const v = val(n, re);
+                return v == null ? '—' : v === true ? 'tak' : v === false ? 'nie' : esc(v);
+              };
+            const ins = [
+              [DEV.btn, /^action$/],
+              [DEV.remote, /^action$/],
+              [DEV.occ, /^occupancy$/],
+              [DEV.alarm, K.alarm]
+            ];
+            return `<div class="g c2">
+              <div class="p">
+                <div class="lb"><span>Listwa (${DEV.strip})</span><span>${l.power != null ? fn(l.power) + ' W' : ''}</span></div>${[1, 2, 3].map(i => `<div class="row"><span>Gniazdo ${i}</span><button class="tg ${l['state_l' + i] == 'ON' ? 'on' : ''}" onclick="cmd('${DEV.strip}',{state_l${i}:'TOGGLE'})"></button></div>`).join('')}
+                <div class="row"><span>Napięcie · prąd · energia</span><span class="mono">${fn(l.voltage, 0)} V · ${fn(l.current, 2)} A · ${fn(l.energy, 2)} kWh</span></div>
+                <div class="note">Przełącznik zmienia się dopiero po potwierdzeniu stanu z Zigbee2MQTT.</div>
+              </div>
+              <div class="p">
+                <div class="lb">Wejścia i czujniki</div>${ins
+              .map(([n, re]) => {
+                const d = S.dev[n] || {};
+                return `<div class="row"><span><span class="d ${d._on ? 'ok' : 'e'}"></span>${n}</span><span class="mono">${sn(n, re)} · ${ago(d._t)}</span></div>`;
+              })
+              .join('')}
+              </div>
+            </div>
+            <div class="p">
+              <div class="lb"><span>Oświetlenie (${bc})</span><span>${b.linkquality != null ? 'lqi ' + b.linkquality : ''}</span></div>
+              <div class="row"><span>Zasilanie</span><button class="tg ${b.state == 'ON' ? 'on' : ''}" onclick="cmd('${bc}',{state:'TOGGLE'})"></button></div>
+              <div class="row"><span>Jasność</span><input type="range" min="0" max="254" value="${b.brightness ?? 127}" onchange="cmd('${bc}',{brightness:+this.value})"></div>
+              <div class="row"><span>Temperatura barwowa</span><input type="range" min="153" max="500" value="${b.color_temp ?? 300}" onchange="cmd('${bc}',{color_temp:+this.value})"></div>
+              <div class="row"><span>Kolor</span><input type="color" value="#e0a526" onchange="cmd('${bc}',{color:{hex:this.value}})"></div>
+              <div class="row"><span>Efekt</span><select onchange="if(this.value)cmd('${bc}',{effect:this.value});this.value=''"><option value="">—</option>${['blink', 'breathe', 'okay', 'channel_change', 'finish_effect', 'stop_effect'].map(e => `<option>${e}</option>`).join('')}</select></div>
+            </div>`;
+          }
+        ],
+
+        ac: [
+          'Dostęp i zdarzenia',
+          2,
+          () => {
+            const cl = [
+              ['ok', 'Dostęp przyznany'],
+              ['no', 'Odmowa dostępu'],
+              ['exp', 'Kod wygasły / blokada'],
+              ['wait', 'Oczekiwanie na kod']
+            ];
+            return `<div class="g c2" style="grid-template-columns:2fr 1fr">
+              <div class="p">
+                <div class="lb"><span>Dziennik zdarzeń</span><span><select id="ef" onchange="evTable('#evl',+$('#en').value,this.value)"><option value="">Wszystkie</option><option>granted</option><option>denied</option><option>button_press</option><option>state_change</option><option>offline</option><option>alarm</option></select> <select id="en" onchange="evTable('#evl',+this.value,$('#ef').value)"><option>100</option><option>500</option></select></span></div>
+                <div id="evl"></div>
+              </div>
+              <div class="p">
+                <div class="lb">Sygnalizacja czytnika</div>${cl.map(([k, t]) => `<div class="row"><span>${t}</span><input type="color" value="${S.col[k]}" onchange="S.col['${k}']=this.value;try{localStorage.col=JSON.stringify(S.col)}catch{};cmd('${DEV.rfid}',{colors:S.col});toast('Zapisano kolor')"></div>`).join('')}
+                <div class="lb" style="margin:18px 0 6px">Czytnik</div>
+                <div class="row"><span><span class="d ${D(DEV.rfid, '_on') ? 'ok' : 'e'}"></span>${DEV.rfid}</span><span class="mono">${ago(D(DEV.rfid, '_t'))}</span></div>
+                <div class="row"><span>Ostatni UID</span><span class="mono">${esc(S.uid || '—')}</span></div>
+              </div>
+            </div>`;
+          },
+          () => evTable('#evl', 100)
+        ],
+
+        rp: [
+          'Raporty',
+          2,
+          () => {
+            const t = new Date().toISOString().slice(0, 10),
+              f = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+            return `<div class="p noprint" style="margin-bottom:16px">
+              <div class="lb">Generator raportu</div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"><select id="rt"><option value="a">Dostęp użytkownika</option><option value="h">Zużycie ciepła</option></select><input type="text" id="ru" placeholder="login" value="${esc(S.user)}" style="width:140px"><input type="date" id="rf" value="${f}"><input type="date" id="rto" value="${t}"><button onclick="genRep()">Generuj</button><button onclick="csv()">CSV</button><button onclick="print()">PDF (drukuj)</button></div>
+            </div>
+            <div class="p">
+              <div class="lb">Podgląd</div>
+              <div id="rv" style="color:var(--mu)">Wybierz parametry i kliknij Generuj.</div>
+            </div>`;
+          }
+        ],
+
+        us: [
+          'Użytkownicy',
+          3,
+          () => `<div class="g c2" style="grid-template-columns:2fr 1fr;align-items:start">
+            <div class="p">
+              <div class="lb"><span>Konta i uprawnienia</span><span id="uc"></span></div><input type="text" id="uq" placeholder="szukaj po loginie" value="${esc(UQ)}" oninput="UQ=this.value;renderUs()" style="width:100%;margin-bottom:10px">
+              <div id="ul">ładowanie…</div>
+            </div>
+            <div class="p">
+              <div class="lb">Nowy użytkownik</div>
+              <div class="row"><span>Login</span><input type="text" id="nn" style="width:150px"></div>
+              <div class="row"><span>Poziom</span><select id="nr"><option value="1">Obserwator</option><option value="2" selected>Operator</option><option value="3">Administrator</option></select></div>
+              <div class="row"><span>Karta</span><b class="mono" id="uid">${esc(S.uid || 'zbliż kartę do czytnika')}</b></div>
+              <div class="row"><span>Ważna od</span><input type="date" id="vf"></div>
+              <div class="row"><span>Ważna do</span><input type="date" id="vt"></div>
+              <div style="margin-top:14px"><button onclick="addU()">+ Dodaj użytkownika</button></div>
+            </div>
+          </div>`,
+          loadUs
+        ],
+
+        dv: [
+          'Urządzenia',
+          3,
+          () =>
+            `<div class="p">
+              <div class="lb"><span>Urządzenia Zigbee</span><span id="dc"></span></div>
+              <div id="dl">ładowanie…</div>
+            </div>
+            <div class="p" id="raw" style="margin-top:16px" hidden></div>`,
+          loadDv
+        ]
+      };
+
+      async function genRep() {
+        const t = $('#rt').value,
+          f = $('#rf').value,
+          to = $('#rto').value;
+        $('#rv').textContent = 'ładowanie…';
+        try {
+          if (t == 'a') {
+            const d = await api(`/access?user=${enc($('#ru').value)}&from=${f}&to=${to}T23:59:59`);
+            R = {
+              h: ['Czas', 'Użytkownik', 'Wynik', 'Powód', 'Czytnik'],
+              r: d.map(x => [
+                fdt(x.time),
+                x.username || '—',
+                x.granted ? 'OK' : 'ODMOWA',
+                x.reason || '',
+                x.reader || '—'
+              ])
+            };
+          } else {
+            const d = await api('/heat?from=' + f);
+            R = { h: ['Dzień', 'Zużycie kWh'], r: d.map(x => [fdy(x.day), fn(x.energy_used_kwh)]) };
+          }
+          $('#rv').innerHTML = tb(
+            R.h.map(esc),
+            R.r.map(r => r.map(esc))
+          );
+        } catch {
+          $('#rv').textContent = 'Błąd pobierania danych';
+        }
+      }
+      let EC = null,
+        US = [],
+        UQ = '';
+      const dv = t => (t ? new Date(t).toLocaleDateString('sv-SE', { timeZone: TZ }) : ''),
+        dt = (v, e) => (v ? new Date(v + (e ? 'T23:59:59' : 'T00:00:00')).toISOString() : null),
+        fd = t => new Date(t).toLocaleDateString('pl-PL', { timeZone: TZ });
+      const cd = c => {
+        const f = c.valid_from ? +new Date(c.valid_from) : 0,
+          t = c.valid_to ? +new Date(c.valid_to) : 0,
+          n = Date.now(),
+          s = !c.is_active
+            ? ['dezaktywowana', 'e']
+            : f > n
+              ? ['jeszcze nieważna', 'w']
+              : t && t < n
+                ? ['wygasła', 'e']
+                : ['aktywna', ''];
+        return `<div class="mono">${f || t ? (f ? 'od ' + fd(f) : '') + (f && t ? ' ' : '') + (t ? 'do ' + fd(t) : '') : 'bez ograniczeń'} <span class="tag ${s[1]}">${s[0]}</span>${c.is_active ? ` <a href="#" title="zmień ważność" onclick="EC=${c.id};renderUs();return false" style="color:var(--mu)">edytuj</a> <a href="#" title="dezaktywuj kartę" onclick="post('/cards/${c.id}/deactivate').then(loadUs);return false" style="color:var(--er)">×</a>` : ''}</div>`;
+      };
+
+      function setUserLvl(id, v) {
+        post('/users/' + id + '/level', { access_level: v }).then(() => {
+          const u = US.find(x => x.id == id);
+          if (u) u.access_level = v;
+          toast('Zmieniono poziom');
+        });
+      }
+
+      function renderUs() {
+        const q = UQ.toLowerCase(),
+          l = US.filter(x => x.username.toLowerCase().includes(q));
+        if (!$('#ul')) return;
+        $('#uc').textContent = (q ? l.length + ' z ' : '') + US.length + ' kont';
+        const rows = l
+          .map(x => {
+            const ec = (x.cards || []).find(c => c.id === EC);
+            return (
+              `<tr>
+                <td>${esc(x.username)}</td>
+                <td><select onchange="setUserLvl(${x.id},+this.value)">${[1, 2, 3].map(v => `<option value="${v}" ${v == x.access_level ? 'selected' : ''}>${LV[v]}</option>`).join('')}</select></td>
+                <td>${(x.cards || []).map(cd).join('') || '—'}</td>
+                <td>${x.is_active ? '<span class="d ok"></span>aktywny' : '<span class="d e"></span>nieaktywny'}</td>
+                <td>${x.is_active ? `<button onclick="addCard(${x.id})">+ karta</button> <button onclick="post('/users/${x.id}/deactivate').then(loadUs)">Usuń</button>` : ''}</td>
+              </tr>` +
+              (ec
+                ? `<tr>
+                  <td colspan="5" style="background:var(--bg)"><span class="mono">Ważność karty (${esc(x.username)}): od <input type="date" id="ef1" value="${dv(ec.valid_from)}"> do <input type="date" id="ef2" value="${dv(ec.valid_to)}"> <button onclick="saveCard(${ec.id})">Zapisz</button> <button onclick="EC=null;renderUs()">Anuluj</button></span></td>
+                </tr>`
+                : '')
+            );
+          })
+          .join('');
+        $('#ul').innerHTML =
+          `<div class="sc">
+            <table class="fx">
+              <colgroup><col><col style="width:130px"><col style="width:38%"><col style="width:110px"><col style="width:150px"></colgroup>
+              <tr>
+                <th>Login</th>
+                <th>Poziom</th>
+                <th>Karty</th>
+                <th>Status</th>
+                <th></th>
+              </tr>${rows || '<tr><td colspan="5" style="color:var(--mu)">brak wyników</td></tr>'}
+            </table>
+          </div>`;
+      }
+
+      async function saveCard(id) {
+        try {
+          await post('/cards/' + id + '/validity', {
+            valid_from: dt($('#ef1').value),
+            valid_to: dt($('#ef2').value, 1)
+          });
+          EC = null;
+          toast('Zapisano ważność');
+          loadUs();
+        } catch {
+          toast('Błąd zapisu');
+        }
+      }
+
+      async function loadUs() {
+        try {
+          US = await api('/users');
+          renderUs();
+        } catch {
+          const e = $('#ul');
+          if (e) e.textContent = 'błąd pobierania użytkowników';
+        }
+      }
+      const vd = () => ({
+        valid_from: $('#vf').value ? new Date($('#vf').value + 'T00:00:00').toISOString() : null,
+        valid_to: $('#vt').value ? new Date($('#vt').value + 'T23:59:59').toISOString() : null
+      });
+
+      async function addCard(id) {
+        if (!S.uid) return toast('Najpierw zbliż kartę do czytnika');
+        try {
+          await post('/users/' + id + '/cards', { uid: S.uid, label: 'karta', ...vd() });
+          S.uid = null;
+          toast('Dodano kartę');
+          show();
+        } catch {
+          toast('Błąd zapisu');
+        }
+      }
+
+      async function addU() {
+        const n = $('#nn').value.trim();
+        if (!n) return toast('Podaj login');
+        const v = vd();
+        if ((v.valid_from || v.valid_to) && !S.uid)
+          return toast('Daty dotyczą karty: najpierw zbliż kartę do czytnika');
+        try {
+          await post('/users', { username: n, access_level: +$('#nr').value, uid: S.uid, ...vd() });
+          S.uid = null;
+          toast('Dodano użytkownika');
+          show();
+        } catch {
+          toast('Błąd zapisu');
+        }
+      }
+      let RAW = null;
+
+      function rawBox() {
+        const r = $('#raw');
+        if (!RAW || !S.dev[RAW]) {
+          r.hidden = true;
+          return;
+        }
+        const o = { ...S.dev[RAW] };
+        Object.keys(o).forEach(k => {
+          if (k[0] == '_') delete o[k];
+        });
+        r.hidden = false;
+        r.innerHTML = `<div class="lb"><span>Surowy payload: ${esc(RAW)}</span><span>prawdziwe nazwy kluczy</span></div><pre class="mono" style="margin:0;white-space:pre-wrap">${esc(JSON.stringify(o, null, 1))}</pre>`;
+      }
+
+      async function loadDv() {
+        try {
+          const l = await api('/devices');
+          if (!$('#dl')) return;
+          $('#dc').textContent = l.length + ' urządzeń';
+          $('#dl').innerHTML = tb(
+            ['Urządzenie', 'Typ', 'Model', 'Status', 'Bat.', 'LQI', 'Odczyt', 'Dane'],
+            l.map(x => {
+              const d = S.dev[x.friendly_name] || {},
+                on = d._on ?? x.is_online,
+                b = d.battery ?? x.battery_pct,
+                data = Object.entries(d)
+                  .filter(
+                    ([k, v]) =>
+                      k[0] != '_' && typeof v != 'object' && !['battery', 'linkquality'].includes(k)
+                  )
+                  .map(([k, v]) => k + '=' + (typeof v == 'number' ? fn(v, v % 1 ? 1 : 0) : v))
+                  .join(' ');
+              return [
+                `<span class="d ${on ? 'ok' : 'e'}"></span><a href="#" onclick="RAW='${esc(x.friendly_name)}';show();return false" style="color:inherit">${esc(x.friendly_name)}</a>`,
+                esc(x.type),
+                esc(x.model || ''),
+                on ? 'online' : 'offline',
+                b != null ? b + ' %' : '—',
+                d.linkquality ?? x.link_quality ?? '—',
+                d._t ? ago(d._t) : x.last_seen ? fdt(x.last_seen) : '—',
+                `<span class="mono">${esc(data)}</span>`
+              ];
+            })
+          );
+          rawBox();
+        } catch {
+          $('#dl').textContent = 'błąd pobierania urządzeń';
+        }
+      }
+
+      function go(p) {
+        pg = p;
+        show();
+      }
+
+      function show() {
+        const on = S.lvl > 0;
+        $('#gate').hidden = on;
+        $('#app').hidden = !on;
+        stat();
+        if (!on) return;
+        if (P[pg][1] > S.lvl) pg = 'ov';
+        const ks = Object.keys(P).filter(k => P[k][1] <= S.lvl);
+        let h = '',
+          i = 0;
+        ks.forEach(k => {
+          if (k == 'ct' || k == 'us')
+            h += `<div class="sep lb">${k == 'ct' ? 'Operacje' : 'Administracja'}</div>`;
+          h += `<a class="${k == pg ? 'on' : ''}" onclick="go('${k}')"><b>${String(++i).padStart(2, '0')}</b>${P[k][0]}</a>`;
+        });
+        $('#nav').innerHTML = h;
+        $('#ttl').textContent = P[pg][0];
+        $('#usr').textContent = S.user + ' · ' + LV[S.lvl];
+        $('#pg').innerHTML = P[pg][2]();
+        if (P[pg][3]) P[pg][3]();
+      }
+      connect();
+      show();
+    </script>
+  </body>
+</html>
