@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { roles } from '../devices'
 import { dateInput, dateIso } from '../format'
-import { api } from '../services/api'
+import { mockApi as api } from '../services/mock'
 import { notify, panel } from '../stores/panel'
 import type { Card, Role, User } from '../types'
 

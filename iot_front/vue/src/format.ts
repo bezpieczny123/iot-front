@@ -10,6 +10,19 @@ export const dateInput = (value: string | number | Date = Date.now()) =>
   new Date(value).toLocaleDateString('sv-SE', { timeZone })
 export const dateIso = (value: string, end = false) =>
   value ? new Date(value + (end ? 'T23:59:59' : 'T00:00:00')).toISOString() : null
+export function calendarDay(day: string, offsetDays = 0) {
+  const utc = new Date(day + 'T00:00:00Z')
+  utc.setUTCDate(utc.getUTCDate() + offsetDays)
+  return utc.toISOString().slice(0, 10)
+}
+
+const warsawOffset = new Intl.DateTimeFormat('en', { timeZone, timeZoneName: 'longOffset' })
+export function warsawMidnight(day: string) {
+  const midnight = new Date(day + 'T00:00:00Z')
+  const offset = warsawOffset.formatToParts(midnight)
+    .find(part => part.type === 'timeZoneName')?.value.replace('GMT', '') || '+00:00'
+  return new Date(day + 'T00:00:00' + offset).toISOString()
+}
 export const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3600000)
 export const number = (value: unknown, digits = 1) =>
   (typeof value === 'number' || (typeof value === 'string' && value.trim())) &&

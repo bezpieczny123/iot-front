@@ -1,6 +1,8 @@
 import { devices } from '../devices'
 import type { AccessRow, Card, Command, Device, EventRow, HeatReading, HistoryPoint, LiveMessage, NewCard, NewUser, Payload, Role, User, Validity } from '../types'
 
+export const isMock = new URLSearchParams(location.search).has('mock')
+
 const models = [
   [devices.remote, 'binary_input', '4 button portable remote control'],
   [devices.button, 'binary_input', 'Sonoff SNZB-01P'],

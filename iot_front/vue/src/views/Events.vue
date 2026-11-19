@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import EventTable from '../components/EventTable.vue'
 import { devices } from '../devices'
 import { age } from '../format'
-import { panel, setColor } from '../stores/panel'
+import { panel, setColor, simulator } from '../stores/panel'
 import type { Colors } from '../types'
 
 const filter = ref('')
@@ -18,7 +18,7 @@ const colors: { key: keyof Colors; label: string }[] = [
 </script>
 
 <template>
-  <div class="g c2 split-wide">
+  <div :class="simulator ? 'g c2 split-wide' : undefined">
     <div class="p">
       <div class="lb">
         <span>Dziennik zdarzeń</span>
@@ -29,7 +29,7 @@ const colors: { key: keyof Colors; label: string }[] = [
       </div>
       <EventTable :limit="limit" :filter="filter" />
     </div>
-    <div class="p">
+    <div v-if="simulator" class="p">
       <div class="lb">Sygnalizacja czytnika</div>
       <label v-for="{ key, label } in colors" :key="key" class="row">
         <span>{{ label }}</span><input type="color" :value="panel.colors[key]" @change="setColor(key, ($event.target as HTMLInputElement).value)">

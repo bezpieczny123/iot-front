@@ -9,6 +9,7 @@ const props = defineProps<{ limit: number; filter?: string }>()
 const rows = ref<EventRow[]>([])
 const loading = ref(false)
 const error = ref(false)
+const truncated = ref(false)
 const visible = computed(() => rows.value.filter(row => !props.filter || [row.source, row.type].includes(props.filter)))
 const badge = (type: string) => type === 'granted' || type === 'OK' ? 'OK' : type === 'denied' || type === 'ODMOWA' ? 'ODMOWA' : type
 
@@ -19,7 +20,10 @@ watch(() => [props.limit, panel.eventsVersion], async (_, __, onCleanup) => {
   error.value = false
   try {
     const result = await api.events(props.limit)
-    if (current) rows.value = result
+    if (current) {
+      rows.value = result.data
+      truncated.value = result.truncated ?? false
+    }
   } catch {
     if (current) error.value = true
   } finally {
@@ -29,6 +33,7 @@ watch(() => [props.limit, panel.eventsVersion], async (_, __, onCleanup) => {
 </script>
 
 <template>
+  <p v-if="truncated && !error" class="field-status">Lista ucięta do {{ limit }} zdarzeń.</p>
   <p v-if="error" class="field-status">Błąd pobierania zdarzeń</p>
   <p v-else-if="loading && !rows.length" class="field-status">ładowanie…</p>
   <div v-else class="sc">

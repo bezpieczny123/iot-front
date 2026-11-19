@@ -4,9 +4,9 @@ import Tile from '../components/Tile.vue'
 import HistoryChart from '../components/HistoryChart.vue'
 import EventTable from '../components/EventTable.vue'
 import { dailyHeatKey, devices } from '../devices'
-import { hoursAgo, number } from '../format'
+import { calendarDay, dateInput, number } from '../format'
 import { api } from '../services/api'
-import { matchingValue, panel } from '../stores/panel'
+import { canView, matchingValue, panel } from '../stores/panel'
 
 const environment = computed(() => panel.devices[devices.temp])
 const presence = computed(() => panel.devices[devices.occ]?.occupancy)
@@ -15,7 +15,8 @@ const heat = computed(() => lastHeat.value ?? matchingValue(panel.devices[device
 
 onMounted(async () => {
   try {
-    lastHeat.value = (await api.heat(hoursAgo(72).toISOString())).at(-1)?.energy_used_kwh
+    const today = dateInput()
+    lastHeat.value = (await api.heat(calendarDay(today, -2), today)).find(row => row.day === today)?.energy_used_kwh
   } catch {
     // The tile can still use the current reading from the socket.
   }
@@ -36,7 +37,7 @@ onMounted(async () => {
   <div class="p">
     <div class="lb">
       <span>Ostatnie zdarzenia</span>
-      <RouterLink v-if="(panel.session?.role ?? 0) >= 2" to="/zdarzenia">wszystkie →</RouterLink>
+      <RouterLink v-if="canView(2)" to="/zdarzenia">wszystkie →</RouterLink>
     </div>
     <EventTable :limit="5" />
   </div>

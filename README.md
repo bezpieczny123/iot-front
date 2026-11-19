@@ -1,6 +1,6 @@
 # Serwerownia IoT
 
-Panel webowy do monitorowania warunków w serwerowni, sterowania urządzeniami Zigbee i zarządzania dostępem przez karty RFID. Frontend znajduje się w `iot_front/vue` i korzysta z Vue 3, TypeScriptu i Vite.
+Panel Vue 3 do monitorowania warunków w serwerowni i sterowania urządzeniami Zigbee. Frontend znajduje się w `iot_front/vue`.
 
 ## Uruchomienie lokalne
 
@@ -12,48 +12,32 @@ npm ci
 npm run dev
 ```
 
-Otwórz [panel w trybie demo](http://localhost:5173/?mock) lub dopisz `?mock` do adresu podanego przez Vite. W tym trybie panel działa bez Node-RED, czytnika i pozostałych urządzeń.
+Otwórz [panel w trybie demo](http://localhost:5173/?mock) albo dopisz `?mock` do adresu podanego przez Vite. Demo działa bez Node-RED, czytnika i pozostałych urządzeń.
 
-- Kliknij **Administrator** na dolnym pasku, aby zobaczyć wszystkie widoki. **Obserwator** i **Operator** pozwalają sprawdzić pozostałe poziomy dostępu.
-- W widoku **Użytkownicy** kliknij **Skanuj nową kartę**, aby uzyskać UID do przypisania do konta.
-- Zmiany kont i kart w demo są przechowywane w pamięci do odświeżenia strony.
+- Wybierz **Administrator** na dolnym pasku, aby zobaczyć wszystkie widoki demo.
+- W widoku **Użytkownicy** użyj **Skanuj nową kartę**, aby zasymulować odczyt UID.
+- Konta, karty i role są symulowane. Zmiany kont i kart trwają do odświeżenia strony.
 
-## Kompilacja i wdrożenie
+## Połączenie z Node-RED
 
-W katalogu `iot_front/vue` uruchom `npm run build`. Polecenie sprawdza typy i tworzy statyczny pakiet w `dist/`. Polecenie `npm run preview` uruchamia lokalny podgląd tego pakietu. Parametr `?mock` działa również w podglądzie.
+Domyślny endpoint to `/ws/serverroom` pod tym samym adresem co panel. Przy HTTPS przeglądarka używa WSS. Aby przekierować połączenie z lokalnego Vite do Node-RED, wpisz adres backendu w `iot_front/vue/.env.local` i uruchom Vite ponownie:
 
-Bez `?mock` panel łączy się z `/api` i `/ws` pod tym samym adresem co strona. Serwuj `dist/` pod wspólnym adresem z endpointami Node-RED lub skieruj te ścieżki do Node-RED przez reverse proxy obsługujące WebSocket. Przy HTTPS panel używa WSS. Repozytorium zawiera frontend i symulator. Backend odpowiada za decyzję o przyznaniu dostępu oraz sprawdzanie uprawnień do żądań REST i poleceń WebSocket.
+```dotenv
+NODE_RED_URL=http://127.0.0.1:1880
+```
 
-## Kontrakt REST
+Jeśli Node-RED używa prefiksu `httpNodeRoot`, dodaj też np. `VITE_WS_PATH=/iot/ws/serverroom`. Otwórz panel bez parametru `?mock`.
 
-Wszystkie poniższe ścieżki mają prefiks `/api`. Odczyty zwracają tablice JSON, a zapisy przyjmują JSON. Dla zapisów klient sprawdza status HTTP.
+Polecenie `npm run build` sprawdza typy i tworzy statyczny pakiet w `dist/`. W środowisku docelowym udostępnij pakiet razem z endpointem lub skieruj ścieżkę WebSocket do Node-RED przez reverse proxy obsługujące upgrade połączenia. `npm run preview` pozwala podejrzeć pakiet lokalnie, także z proxy i w trybie demo.
 
-| Metoda i ścieżka | Parametry lub pola |
-| --- | --- |
-| `GET /history` | `device`, `key`, `from`, `to`, `agg` (`raw` lub `hour`). Zwraca punkty `{ time, value }`. |
-| `GET /heat` | `from`. Zwraca dzienne odczyty `{ day, energy_used_kwh }`. |
-| `GET /events` | `limit`. Zwraca wpisy z polami `time`, `source`, `type`, `subject` i opcjonalnym `details`. |
-| `GET /access` | `user`, `from`, `to`. Zwraca `time`, `username`, `granted` oraz opcjonalne `reason` i `reader`. |
-| `GET /devices` | Zwraca listę urządzeń Zigbee według `friendly_name`. |
-| `GET /users` | Zwraca konta z `id`, `username`, `access_level`, `is_active` oraz tablicą `cards`. |
-| `POST /users` | `username`, `access_level`, `uid`, `valid_from`, `valid_to`. Konto można utworzyć bez karty, przekazując `null` jako UID i daty. |
-| `POST /users/:id/level` | `access_level` w zakresie 1–3. |
-| `POST /users/:id/cards` | `uid`, `label`, `valid_from`, `valid_to`. |
-| `POST /users/:id/deactivate` | Pusty obiekt JSON. |
-| `POST /cards/:id/validity` | `valid_from`, `valid_to`. Granica okresu ważności może mieć wartość `null`. |
-| `POST /cards/:id/deactivate` | Pusty obiekt JSON. |
+## WebSocket v2
 
-## Kontrakt WebSocket
+Pełny kontrakt opisuje [WS_API.md](WS_API.md).
 
-Panel odbiera przez `/ws` cztery rodzaje komunikatów JSON:
+- Po otwarciu połączenia panel odczytuje stan przez `GET_AUTH_STATE`. Poprawny skan karty odblokowuje cały system. Po odblokowaniu panel pobiera `GET_SNAPSHOT` i odbiera aktualizacje przez `SUBSCRIBE`.
+- Przycisk **Zablokuj system** wysyła `LOCK` i blokuje dostęp globalnie. Zamknięcie karty przeglądarki kończy podgląd.
+- Wykresy, raporty i zdarzenia używają odczytów WebSocket. Identyfikatory urządzeń i encji pochodzą ze snapshotu.
+- Polecenia sterujące używają akcji v2. Wyłączenie L2 wymaga potwierdzenia operatora. Kontrolki stanu urządzeń odzwierciedlają odczyty ze snapshotu.
+- Widok rejestracji kont i kart jest dostępny w demo. Kontrakt v2 obejmuje odczyt dziennika dostępu i globalną blokadę.
 
-- Odczyt lub stan urządzenia w postaci `{ "topic": "zigbee2mqtt/listwa", "payload": { "state_l1": "ON" } }`.
-- Dostępność urządzenia pod `zigbee2mqtt/<friendly_name>/availability` z `payload.state` równym `online` lub `offline`.
-- Logowanie po pozytywnej weryfikacji karty przez backend, np. `{ "type": "auth", "username": "admin", "level": 3 }`. Poziomy 1, 2 i 3 odpowiadają kolejno Obserwatorowi, Operatorowi i Administratorowi.
-- Powiadomienie `{ "type": "event" }`, po którym widoczna tabela zdarzeń odświeża się przez REST.
-
-Panel wysyła polecenia w postaci `{ "type": "cmd", "device": "listwa", "payload": { "state_l1": "TOGGLE" } }`. Node-RED przekazuje payload na temat `zigbee2mqtt/<device>/set`. Panel aktualizuje stan przełącznika po odebraniu komunikatu o nowym stanie urządzenia.
-
-Odczyt UID przychodzi w payloadzie czytnika jako zwykły komunikat Zigbee2MQTT. Panel używa go w formularzach przypisywania kart. Logowanie następuje po odebraniu osobnego komunikatu `auth`.
-
-Klient komunikacji i symulator są w [`src/services`](iot_front/vue/src/services), typy danych w [`src/types.ts`](iot_front/vue/src/types.ts), a nazwy urządzeń w [`src/devices.ts`](iot_front/vue/src/devices.ts).
+Po podłączeniu Node-RED otwórz panel w dwóch kartach przeglądarki. Sprawdź, czy skan odblokowuje obie, czy **Zablokuj system** czyści dane w obu i czy odświeżenie jednej karty przy aktywnym dostępie przywraca telemetrię bez ponownego skanu.

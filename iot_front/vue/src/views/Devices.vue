@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { age, dateTime, number } from '../format'
-import { api } from '../services/api'
+import { liveDevices } from '../services/api'
+import { isMock, mockApi } from '../services/mock'
 import { panel } from '../stores/panel'
 import type { Device, DeviceState } from '../types'
 
@@ -9,7 +10,7 @@ const inventory = ref<Device[]>([])
 const selected = ref('')
 const loading = ref(true)
 const error = ref(false)
-const rows = computed(() => inventory.value.map(device => {
+const rows = computed(() => (isMock ? inventory.value : liveDevices()).map(device => {
   const live = panel.devices[device.friendly_name]
   return {
     ...device,
@@ -27,6 +28,12 @@ const raw = computed(() => {
   const live = panel.devices[selected.value]
   return live ? JSON.stringify(payload(live), null, 2) : ''
 })
+const entityDetails = computed(() => {
+  const snapshot = panel.snapshot
+  const device = snapshot?.devices.find(item => item.friendly_name === selected.value)
+  if (!device) return []
+  return snapshot?.entities.filter(entity => String(entity.device_id) === String(device.id)) ?? []
+})
 
 function payload(device?: DeviceState) {
   return Object.fromEntries(Object.entries(device ?? {}).filter(([key]) => !key.startsWith('_')))
@@ -34,7 +41,7 @@ function payload(device?: DeviceState) {
 
 onMounted(async () => {
   try {
-    inventory.value = await api.devices()
+    if (isMock) inventory.value = await mockApi.devices()
   } catch {
     error.value = true
   } finally {
@@ -53,7 +60,7 @@ onMounted(async () => {
         <tbody>
           <tr v-for="row in rows" :key="row.friendly_name">
             <td><span class="d" :class="row.online ? 'ok' : 'e'"></span><button class="device-name text-button" @click="selected = row.friendly_name">{{ row.friendly_name }}</button></td>
-            <td>{{ row.type }}</td><td>{{ row.model }}</td><td>{{ row.online ? 'online' : 'offline' }}</td>
+            <td>{{ row.type }}</td><td>{{ row.model }}</td><td>{{ row.online == null ? 'nieznany' : row.online ? 'online' : 'offline' }}</td>
             <td>{{ row.battery == null ? '—' : row.battery + ' %' }}</td><td>{{ row.quality ?? '—' }}</td>
             <td>{{ row.lastSeen }}</td><td class="mono">{{ row.summary }}</td>
           </tr>
@@ -63,7 +70,11 @@ onMounted(async () => {
     </div>
   </div>
   <div v-if="selected" class="p" style="margin-top:16px">
-    <div class="lb"><span>Surowy payload: {{ selected }}</span><button @click="selected = ''">Zamknij</button></div>
+    <div class="lb"><span>Odczyty urządzenia · {{ selected }}</span><button @click="selected = ''">Zamknij</button></div>
+    <div v-for="entity in entityDetails" :key="entity.id" class="row">
+      <span>{{ entity.source_key }}{{ entity.retained ? ' · retained' : '' }}</span>
+      <span>{{ entity.state_updated_at ? dateTime(entity.state_updated_at) : '-' }}</span>
+    </div>
     <pre v-if="raw" class="mono raw-payload">{{ raw }}</pre>
     <p v-else class="field-status">Brak komunikatów odebranych w tej sesji</p>
   </div>

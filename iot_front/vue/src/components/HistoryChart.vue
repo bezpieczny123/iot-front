@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { api } from '../services/api'
-import { clock, dateTime, dayMonth, hoursAgo, number } from '../format'
+import { calendarDay, clock, dateTime, dayMonth, hoursAgo, number, warsawMidnight } from '../format'
+import { errorMessage } from '../stores/panel'
 
 const props = defineProps<{
   title: string; device: string; metric: string; unit: string; hours: number; from?: string; to?: string
@@ -9,6 +10,7 @@ const props = defineProps<{
 const points = ref<{ time: number; value: number }[]>([])
 const loading = ref(false)
 const error = ref('')
+const truncated = ref(false)
 const daily = ref(false)
 const hover = ref<number | null>(null)
 const timespan = computed(() => (points.value.at(-1)?.time ?? 0) - (points.value[0]?.time ?? 0) || 1)
@@ -38,14 +40,14 @@ watch(() => [props.hours, props.from, props.to, props.device, props.metric], asy
   hover.value = null
   points.value = []
   error.value = ''
-  let from = props.hours ? hoursAgo(props.hours) : new Date(props.from + 'T00:00:00')
-  let to = props.hours ? new Date() : new Date(props.to + 'T23:59:59')
-  if (!Number.isFinite(+from) || !Number.isFinite(+to)) {
+  truncated.value = false
+  if (!props.hours && (!props.from || !props.to || props.from > props.to)) {
     loading.value = false
-    error.value = 'Wybierz obie daty'
+    error.value = 'Wybierz poprawny zakres dat'
     return
   }
-  if (from > to) [from, to] = [to, from]
+  const from = props.from && !props.hours ? new Date(warsawMidnight(props.from)) : hoursAgo(props.hours)
+  const to = props.to && !props.hours ? new Date(warsawMidnight(calendarDay(props.to, 1))) : new Date()
   daily.value = +to - +from > 1.5 * 86400000
   loading.value = true
   try {
@@ -53,11 +55,13 @@ watch(() => [props.hours, props.from, props.to, props.device, props.metric], asy
       device: props.device, key: props.metric, from: from.toISOString(), to: to.toISOString(),
       agg: daily.value ? 'hour' : 'raw',
     }))
-    if (current) points.value = result.map(point => ({ time: +new Date(point.time), value: +point.value }))
+    if (!current) return
+    truncated.value = result.truncated ?? false
+    points.value = result.data.filter(point => point.value != null).map(point => ({ time: +new Date(point.time), value: +point.value }))
       .filter(point => Number.isFinite(point.time) && Number.isFinite(point.value))
       .sort((a, b) => a.time - b.time)
-  } catch {
-    if (current) error.value = 'Błąd pobierania pomiarów'
+  } catch (reason) {
+    if (current) error.value = errorMessage(reason)
   } finally {
     if (current) loading.value = false
   }
@@ -80,6 +84,7 @@ function track(event: PointerEvent) {
       <span>{{ title }}</span>
       <span>{{ unit }}<template v-if="points.length"> · {{ number(limits.low) }}–{{ number(limits.high) }}</template></span>
     </div>
+    <p v-if="truncated" class="field-status">Wyniki ucięte. Zawęź zakres dat.</p>
     <div v-if="loading || !points.length" class="chart-empty">{{ loading ? 'ładowanie…' : error || 'brak danych' }}</div>
     <template v-else>
       <div class="cw" @pointermove="track" @pointerleave="hover = null">

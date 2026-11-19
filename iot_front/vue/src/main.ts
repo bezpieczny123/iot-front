@@ -1,7 +1,7 @@
 import { createApp, watch } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
-import { panel } from './stores/panel'
+import { canView } from './stores/panel'
 import Overview from './views/Overview.vue'
 import Environment from './views/Environment.vue'
 import Energy from './views/Energy.vue'
@@ -20,20 +20,23 @@ export const pages = [
   { path: '/sterowanie', title: 'Sterowanie', role: 2, group: 'Operacje', component: Control },
   { path: '/zdarzenia', title: 'Dostęp i zdarzenia', role: 2, component: Events },
   { path: '/raporty', title: 'Raporty', role: 2, component: Reports },
-  { path: '/uzytkownicy', title: 'Użytkownicy', role: 3, group: 'Administracja', component: Users },
+  { path: '/uzytkownicy', title: 'Użytkownicy', role: 3, group: 'Administracja', demoOnly: true, component: Users },
   { path: '/urzadzenia', title: 'Urządzenia', role: 3, component: Devices },
 ]
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    ...pages.map(({ path, title, role, component }) => ({ path, component, meta: { title, role } })),
+    ...pages.map(({ path, title, role, demoOnly, component }) => ({ path, component, meta: { title, role, demoOnly } })),
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
+const allowed = (meta: typeof router.currentRoute.value.meta) => canView(Number(meta.role), meta.demoOnly === true)
 router.beforeEach(to => {
-  if (to.path !== '/' && (!panel.session || Number(to.meta.role) > panel.session.role)) return '/'
+  if (to.path !== '/' && !allowed(to.meta)) return '/'
 })
-watch(() => panel.session, () => { void router.replace('/') })
+watch(() => allowed(router.currentRoute.value.meta), permitted => {
+  if (!permitted && router.currentRoute.value.path !== '/') void router.replace('/')
+})
 
 createApp(App, { pages }).use(router).mount('#root')

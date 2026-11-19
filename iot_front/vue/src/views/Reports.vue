@@ -2,20 +2,22 @@
 import { ref } from 'vue'
 import { dateInput, dateTime, dayMonth, hoursAgo, number } from '../format'
 import { api } from '../services/api'
-import { notify, panel } from '../stores/panel'
+import { errorMessage, notify, panel } from '../stores/panel'
 
 const type = ref<'access' | 'heat'>('access')
-const username = ref(panel.session?.username ?? '')
+const username = ref(panel.session?.username ?? panel.snapshot?.access.username ?? '')
 const from = ref(dateInput(hoursAgo(720)))
 const to = ref(dateInput())
 const report = ref<{ headers: string[]; rows: string[][] }>()
 const loading = ref(false)
 const error = ref('')
+const truncated = ref(false)
 
 async function generate() {
   const range = { from: from.value, to: to.value }
   report.value = undefined
   error.value = ''
+  truncated.value = false
   if (!range.from || !range.to || range.from > range.to) {
     error.value = 'Wybierz poprawny zakres dat'
     return
@@ -23,21 +25,22 @@ async function generate() {
   loading.value = true
   try {
     if (type.value === 'access') {
-      const rows = await api.access(username.value.trim(), range.from, range.to)
+      const { data: rows, truncated: limited } = await api.access(username.value.trim(), range.from, range.to)
+      truncated.value = limited ?? false
       report.value = {
         headers: ['Czas', 'Użytkownik', 'Wynik', 'Powód', 'Czytnik'],
         rows: rows.map(row => [dateTime(row.time), row.username || '—', row.granted ? 'OK' : 'ODMOWA', row.reason ?? '', row.reader || '—']),
       }
     } else {
-      const rows = await api.heat(range.from)
+      const rows = await api.heat(range.from, range.to)
       report.value = {
         headers: ['Dzień', 'Zużycie kWh'],
         rows: rows.filter(row => dateInput(row.day) >= range.from && dateInput(row.day) <= range.to)
           .map(row => [dayMonth(row.day), number(row.energy_used_kwh)]),
       }
     }
-  } catch {
-    error.value = 'Błąd pobierania danych'
+  } catch (reason) {
+    error.value = errorMessage(reason)
   } finally {
     loading.value = false
   }
@@ -76,6 +79,7 @@ const printReport = () => window.print()
   </form>
   <div class="p">
     <div class="lb">Podgląd</div>
+    <p v-if="truncated" class="field-status">Wyniki ucięte. Zawęź zakres dat.</p>
     <p v-if="loading || error || !report" class="field-status">{{ loading ? 'ładowanie…' : error || 'Wybierz parametry i kliknij Generuj.' }}</p>
     <div v-else class="tw">
       <table>
