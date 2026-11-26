@@ -31,6 +31,8 @@ export interface AuthState extends Envelope {
   unlocked: boolean
   expires_at: string | null
   reason?: string | null
+  access_level?: number | null
+  username?: string | null
 }
 
 export interface SnapshotDevice {
@@ -64,7 +66,7 @@ export interface Automation {
 export interface Snapshot {
   devices: SnapshotDevice[]
   entities: SnapshotEntity[]
-  access: { unlocked: boolean; username: string | null; expires_at: string | null }
+  access: { unlocked: boolean; username: string | null; expires_at: string | null; access_level?: number | null }
   automation: Automation
   transport: { mqtt: string }
 }

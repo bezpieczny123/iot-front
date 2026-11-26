@@ -22,6 +22,8 @@ export const panel = reactive({
   snapshot: null as Snapshot | null,
   access: 'checking' as 'checking' | 'locked' | 'unlocked',
   expiresAt: null as string | null,
+  level: null as Role | null,
+  username: null as string | null,
   connectionError: '',
   online: false,
   eventsVersion: 0,
@@ -83,7 +85,7 @@ if (simulator) panel.online = true
 export function canView(role: number, demoOnly = false) {
   return isMock
     ? role <= (panel.session?.role ?? 0)
-    : !demoOnly && panel.access === 'unlocked' && panel.snapshot !== null
+    : !demoOnly && panel.access === 'unlocked' && panel.snapshot !== null && role <= (panel.level ?? 0)
 }
 
 function clearAccess(state: 'checking' | 'locked') {
@@ -91,6 +93,8 @@ function clearAccess(state: 'checking' | 'locked') {
   authRevision++
   panel.access = state
   panel.expiresAt = null
+  panel.level = null
+  panel.username = null
   panel.snapshot = null
   panel.devices = Object.create(null)
   lastEventRefresh = 0
@@ -128,6 +132,7 @@ function receiveLive(message: Envelope) {
     notify('Karta nie ma dostępu')
     panel.eventsVersion++
   }
+  if (message.type === 'CONTROL_DENIED' && message.code === 'INSUFFICIENT_LEVEL') notify('Karta nie ma uprawnień do sterowania')
   if (message.type === 'CONTROL_DENIED' && message.code === 'AUTH_REQUIRED') {
     notify('Sterowanie wymaga odblokowania kartą')
   }
@@ -143,6 +148,7 @@ function updateAccess(message: AuthState) {
   }
   panel.access = 'unlocked'
   panel.expiresAt = message.expires_at
+  setLevel(message.access_level, message.username)
   const generation = accessGeneration
   if (!panel.snapshot) {
     void requestLive<DataResponse<Snapshot>>({ action: 'GET_SNAPSHOT' }, 'SNAPSHOT')
@@ -169,12 +175,18 @@ function subscribe() {
     .finally(() => { if (connection === connectionGeneration) subscription = undefined })
 }
 
+function setLevel(level: number | null | undefined, username: string | null | undefined) {
+  if (typeof level === 'number' && level >= 1 && level <= 3) panel.level = level as Role
+  if (typeof username === 'string') panel.username = username
+}
+
 function applySnapshot({ data: snapshot, timestamp }: DataResponse<Snapshot>) {
   if (panel.access !== 'unlocked' || !snapshot?.access?.unlocked) return
   if (!Array.isArray(snapshot.devices) || !Array.isArray(snapshot.entities)) return
   const time = Date.parse(timestamp)
   if (!Number.isFinite(time) || time < snapshotTime) return
   snapshotTime = time
+  setLevel(snapshot.access.access_level, snapshot.access.username)
   const state: typeof panel.devices = Object.create(null)
   const names = new Map<string, string>()
   for (const device of snapshot.devices) {
@@ -231,6 +243,7 @@ export async function requestLive<T extends Envelope>(body: Request, ...expected
 const errors: Record<string, string> = {
   AUTH_REQUIRED: 'Zbliż kartę do czytnika',
   SYSTEM_REVOKED: 'Dostęp został cofnięty',
+  INSUFFICIENT_LEVEL: 'Brak uprawnień do tej operacji',
   DISCONNECTED: 'Brak połączenia z serwerem',
   TIMEOUT: 'Serwer nie odpowiedział na żądanie',
   MQTT_OFFLINE: 'Broker MQTT jest niedostępny',
