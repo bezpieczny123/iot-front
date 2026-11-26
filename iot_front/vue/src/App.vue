@@ -40,7 +40,7 @@ const gateMessage = computed(() => {
         <div class="who">
           <span><span class="d" :class="panel.online ? 'ok' : 'e'"></span>{{ panel.online ? simulator ? 'mock' : 'online' : 'offline' }}</span>
           <span v-if="panel.session">{{ panel.session.username }} · {{ roles[panel.session.role] }}</span>
-          <span v-else-if="panel.snapshot?.access.username">{{ panel.snapshot.access.username }}</span>
+          <span v-else-if="panel.username">{{ panel.username }}<template v-if="panel.level"> · {{ roles[panel.level] }}</template></span>
           <span v-if="panel.expiresAt">Dostęp do {{ dateTime(panel.expiresAt) }}</span>
           <span v-if="!simulator && panel.snapshot?.transport.mqtt !== 'connected'" role="status">MQTT niedostępne</span>
           <button @click="logout">{{ simulator ? 'Wyloguj' : 'Zablokuj system' }}</button>
